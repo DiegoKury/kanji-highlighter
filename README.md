@@ -1,6 +1,6 @@
 # Kanji Highlighter
 
-**Kanji Highlighter** is a Chrome extension designed for Japanese language learners, translators, and enthusiasts. This extension allows you to highlight Japanese Kanji on any webpage and instantly access detailed information from [Jisho.org](https://jisho.org), a powerful online Japanese dictionary.
+**Kanji Highlighter** is a Chrome extension designed for Japanese language learners, translators, and enthusiasts. This extension allows you to highlight Japanese Kanji on any webpage and instantly access detailed information from [Jisho.org](https://jisho.org), a powerful online Japanese dictionary. https://chromewebstore.google.com/detail/kanji-highlighter/jimnldmbimiecphmfncjenhbkgcagebp?pli=1
 
 ---
 
