@@ -1,10 +1,10 @@
 {
     "manifest_version": 3,
-    "name": "Kanji Highlighter",
+    "name": "(test) Kanji Highlighter",
     "version": "1.0",
     "description": "Highlight a kanji to see the first result from Jisho.org.",
     "permissions": ["storage", "contextMenus"],
-    "host_permissions": ["https://jisho.org/*"],
+    "host_permissions": ["https://jisho.org/*", "http://www.gavo.t.u-tokyo.ac.jp/*"],
     "action": {
       "default_popup": "popup.html",
       "default_icon": {
