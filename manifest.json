@@ -1,8 +1,8 @@
 {
     "manifest_version": 3,
     "name": "(test) Kanji Highlighter",
-    "version": "1.0",
-    "description": "Highlight a kanji to see the first result from Jisho.org.",
+    "version": "1.1.0",
+    "description": "Highlight any Japanese word to see its reading, pitch accent, and meaning - instantly.",
     "permissions": ["storage", "contextMenus"],
     "host_permissions": ["https://jisho.org/*", "http://www.gavo.t.u-tokyo.ac.jp/*"],
     "action": {
