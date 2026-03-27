@@ -1,8 +1,9 @@
 {
   "manifest_version": 3,
-  "name": "Kanji Highlighter",
-  "version": "1.1.0",
-  "description": "Highlight any Japanese word to see its reading, pitch accent, and meaning - instantly.",
+  "name": "__MSG_extName__",
+  "version": "1.2.0",
+  "description": "__MSG_extDescription__",
+  "default_locale": "en",
   "permissions": ["storage", "contextMenus"],
   "host_permissions": ["https://jisho.org/*", "http://www.gavo.t.u-tokyo.ac.jp/*"],
   "action": {
@@ -19,8 +20,8 @@
   "content_scripts": [
     {
       "matches": ["http://*/*", "https://*/*"],
-      "js": ["content.js"]
+      "js": ["content.js"],
+      "css": ["content.css"]
     }
   ]
 }
-  

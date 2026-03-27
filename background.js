@@ -1,3 +1,6 @@
+const cache = new Map();
+const CACHE_TTL = 3600000; // 1 hour
+
 chrome.runtime.onInstalled.addListener(() => {
   chrome.contextMenus.create({
     id: "kanjiLookup",
@@ -18,8 +21,16 @@ chrome.contextMenus.onClicked.addListener((info) => {
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message.action === "fetchData") {
     const selection = message.selection;
+    const timeout = message.fetchTimeout || 5000;
+
+    const cached = cache.get(selection);
+    if (cached && Date.now() - cached.time < CACHE_TTL) {
+      sendResponse(cached.data);
+      return true;
+    }
+
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000);
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
 
     const jishoUrl = `https://jisho.org/api/v1/search/words?keyword=${encodeURIComponent(selection)}`;
     const ojadUrl = `http://www.gavo.t.u-tokyo.ac.jp/ojad/search/index/display:print/sortprefix:accent/narabi1:kata_asc/narabi2:accent_asc/narabi3:mola_asc/yure:visible/curve:invisible/details:invisible/limit:500/word:${encodeURIComponent(selection)}`;
@@ -30,11 +41,13 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     ])
       .then(([jishoData, ojadHtml]) => {
         clearTimeout(timeoutId);
-        sendResponse({ data: jishoData, ojadHtml });
+        const result = { data: jishoData, ojadHtml };
+        cache.set(selection, { data: result, time: Date.now() });
+        sendResponse(result);
       })
       .catch(error => {
         clearTimeout(timeoutId);
-        sendResponse({ error: error.toString() });
+        sendResponse({ error: error.name === "AbortError" ? "timeout" : error.toString() });
       });
 
     return true;

@@ -63,6 +63,23 @@
       justify-content: space-between;
       margin-bottom: 10px;
     }
+    hr {
+      border: none;
+      border-top: 1px solid #eee;
+      margin: 10px 0;
+    }
+    .settings label {
+      font-size: 13px;
+      color: #555;
+      margin-bottom: 6px;
+    }
+    .settings input[type="number"] {
+      width: 50px;
+      padding: 2px 4px;
+      border: 1px solid #ccc;
+      border-radius: 3px;
+      font-size: 13px;
+    }
   </style>
 </head>
 <body>
@@ -75,6 +92,17 @@
       <span class="slider"></span>
     </div>
   </label>
+  <hr>
+  <div class="settings">
+    <label>
+      Auto-dismiss (sec)
+      <input type="number" id="dismissTimeout" min="3" max="30" value="8">
+    </label>
+    <label>
+      Fetch timeout (sec)
+      <input type="number" id="fetchTimeout" min="3" max="15" value="5">
+    </label>
+  </div>
   <script src="popup.js"></script>
 </body>
 </html>

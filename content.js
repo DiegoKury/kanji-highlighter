@@ -1,13 +1,20 @@
 let enabled = false;
-let spinnerStyleInjected = false;
+let currentPopup = null;
+let requestId = 0;
+let dismissTimeout = 8000;
+let fetchTimeout = 5000;
 
-chrome.storage.sync.get(["enabled"], (data) => {
+chrome.storage.sync.get(["enabled", "dismissTimeout", "fetchTimeout"], (data) => {
   enabled = data.enabled || false;
+  if (data.dismissTimeout) dismissTimeout = data.dismissTimeout;
+  if (data.fetchTimeout) fetchTimeout = data.fetchTimeout;
 });
 
 chrome.storage.onChanged.addListener((changes, area) => {
-  if (area === "sync" && changes.enabled) {
-    enabled = changes.enabled.newValue;
+  if (area === "sync") {
+    if (changes.enabled) enabled = changes.enabled.newValue;
+    if (changes.dismissTimeout) dismissTimeout = changes.dismissTimeout.newValue;
+    if (changes.fetchTimeout) fetchTimeout = changes.fetchTimeout.newValue;
   }
 });
 
@@ -69,26 +76,21 @@ function parseOJAD(htmlText) {
 
 function buildReadingElem(reading, pitchData, word) {
   const container = document.createElement("div");
-  container.style.cssText = "font-size:15px; color:#555; margin-bottom:5px;";
+  container.className = "kh-reading";
 
   const label = document.createElement("span");
-  label.style.cssText = "color:#888; font-size:13px; margin-right:4px;";
+  label.className = "kh-reading-label";
   label.textContent = "Reading:";
   container.appendChild(label);
 
   const entries = pitchData && (pitchData[word] || pitchData[reading]);
-  const chars =
-    entries &&
-    entries[0] &&
-    entries[0].data[0] &&
-    entries[0].data[0][0];
+  const chars = entries && entries[0] && entries[0].data[0] && entries[0].data[0][0];
 
   if (!chars || !chars.length) {
     container.appendChild(document.createTextNode(reading));
     return container;
   }
 
-  const color = "#555";
   const hasDropAnywhere = chars.some((c) => c.type === "accent_top");
 
   chars.forEach(({ type, char }, i) => {
@@ -101,123 +103,155 @@ function buildReadingElem(reading, pitchData, word) {
 
     const span = document.createElement("span");
     span.textContent = char;
-    if (isHigh) {
-      span.style.borderTop = `2px solid ${color}`;
-      span.style.paddingTop = "1px";
-    } else if (hasDropAnywhere) {
-      span.style.borderBottom = `2px solid ${color}`;
-      span.style.paddingBottom = "1px";
-    }
-    if (isDropAfter || isStepUp) {
-      span.style.borderRight = `2px solid ${color}`;
-      span.style.paddingRight = "1px";
-      span.style.marginRight = "1px";
-    }
+    if (isHigh) span.classList.add("kh-pitch-high");
+    else if (hasDropAnywhere) span.classList.add("kh-pitch-low");
+    if (isDropAfter || isStepUp) span.classList.add("kh-pitch-step");
     container.appendChild(span);
   });
 
   return container;
 }
 
+function buildMeaningsElem(senses) {
+  const container = document.createElement("div");
+  container.className = "kh-meanings";
+
+  const maxSenses = Math.min(senses.length, 3);
+  for (let i = 0; i < maxSenses; i++) {
+    const sense = senses[i];
+    const div = document.createElement("div");
+    div.className = "kh-sense";
+
+    if (sense.parts_of_speech && sense.parts_of_speech.length) {
+      const pos = document.createElement("span");
+      pos.className = "kh-pos";
+      pos.textContent = sense.parts_of_speech.join(", ");
+      div.appendChild(pos);
+    }
+
+    div.appendChild(document.createTextNode(sense.english_definitions.join(", ")));
+    container.appendChild(div);
+  }
+
+  return container;
+}
+
 function createPopup(x, y) {
   const popup = document.createElement("div");
-  popup.style.cssText = `
-    position: absolute;
-    top: ${y + 5}px;
-    left: ${x + 5}px;
-    background: #f7f7f7;
-    border: 1px solid #ccc;
-    border-radius: 4px;
-    padding: 10px;
-    max-width: 300px;
-    font-family: 'Helvetica Neue', Arial, sans-serif;
-    font-size: 14px;
-    color: #333;
-    line-height: 1.4;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-    z-index: 10000;
-  `;
-
-  const closeBtn = document.createElement("span");
-  closeBtn.textContent = "×";
-  closeBtn.style.cssText =
-    "position:absolute; top:5px; right:5px; cursor:pointer; font-size:16px; font-weight:bold; color:#aaa;";
-  closeBtn.addEventListener("click", () => dismissPopup(popup));
-  popup.appendChild(closeBtn);
-
+  popup.className = "kh-popup";
+  popup.style.top = `${y + 5}px`;
+  popup.style.left = `${x + 5}px`;
+  popup.setAttribute("role", "tooltip");
   return popup;
 }
 
-function createSpinner() {
-  if (!spinnerStyleInjected) {
-    const style = document.createElement("style");
-    style.innerHTML =
-      "@keyframes kh-spin { 0% { transform:rotate(0deg) } 100% { transform:rotate(360deg) } }";
-    document.head.appendChild(style);
-    spinnerStyleInjected = true;
-  }
-
-  const spinner = document.createElement("div");
-  spinner.style.cssText =
-    "border:4px solid #f3f3f3; border-top:4px solid #3498db; border-radius:50%; width:24px; height:24px; animation:kh-spin 1s linear infinite; margin:0 auto;";
-  return spinner;
+function addCloseBtn(popup) {
+  const closeBtn = document.createElement("button");
+  closeBtn.className = "kh-close";
+  closeBtn.textContent = "×";
+  closeBtn.setAttribute("aria-label", "Close");
+  closeBtn.addEventListener("mousedown", (e) => {
+    e.stopPropagation();
+    dismissPopup(popup);
+  });
+  popup.prepend(closeBtn);
 }
 
-let currentPopup = null;
+function clampPopup(popup) {
+  const rect = popup.getBoundingClientRect();
+  if (rect.right > window.innerWidth) {
+    popup.style.left = `${Math.max(0, window.innerWidth - rect.width - 10 + window.scrollX)}px`;
+  }
+  if (rect.bottom > window.innerHeight) {
+    popup.style.top = `${Math.max(0, window.innerHeight - rect.height - 10 + window.scrollY)}px`;
+  }
+}
+
+let justDismissed = false;
 
 function dismissPopup(popup) {
   popup.remove();
   if (currentPopup === popup) currentPopup = null;
+  justDismissed = true;
 }
+
+// --- Keyboard handler ---
+
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && currentPopup) {
+    dismissPopup(currentPopup);
+  }
+});
+
+// --- Click-outside dismiss ---
+
+document.addEventListener("mousedown", (event) => {
+  if (currentPopup && !currentPopup.contains(event.target)) {
+    dismissPopup(currentPopup);
+  }
+});
 
 // --- Main event listener ---
 
 document.addEventListener("mouseup", (event) => {
   if (!enabled) return;
 
+  if (justDismissed) {
+    justDismissed = false;
+    return;
+  }
+
   const selection = window.getSelection().toString().trim();
   if (!selection || !japaneseRegex.test(selection)) return;
 
-  if (currentPopup) dismissPopup(currentPopup);
-
+  const thisRequest = ++requestId;
   const popup = createPopup(event.pageX, event.pageY);
-  const spinner = createSpinner();
+
+  const spinner = document.createElement("div");
+  spinner.className = "kh-spinner";
   popup.appendChild(spinner);
   document.body.appendChild(popup);
   currentPopup = popup;
 
-  chrome.runtime.sendMessage({ action: "fetchData", selection }, (response) => {
-    if (!currentPopup) return;
-    popup.removeChild(spinner);
+  chrome.runtime.sendMessage(
+    { action: "fetchData", selection, fetchTimeout },
+    (response) => {
+      if (thisRequest !== requestId || currentPopup !== popup) return;
+      popup.removeChild(spinner);
+      addCloseBtn(popup);
 
-    if (!response || response.error || !response.data?.data?.length) {
       if (!response || response.error) {
-        dismissPopup(popup);
-      } else {
+        const errMsg = document.createElement("div");
+        errMsg.className = "kh-error";
+        errMsg.textContent = response?.error === "timeout"
+          ? "Request timed out. Try again."
+          : "Lookup failed. Check your connection.";
+        popup.appendChild(errMsg);
+        setTimeout(() => dismissPopup(popup), 3000);
+        return;
+      }
+
+      if (!response.data?.data?.length) {
         popup.appendChild(document.createTextNode("No results found."));
         setTimeout(() => dismissPopup(popup), 3000);
+        return;
       }
-      return;
+
+      const entry = response.data.data[0];
+      const word = entry.japanese[0].word || selection;
+      const reading = entry.japanese[0].reading || "";
+      const pitchData = response.ojadHtml ? parseOJAD(response.ojadHtml) : null;
+
+      const wordElem = document.createElement("div");
+      wordElem.className = "kh-word";
+      wordElem.textContent = word;
+
+      popup.appendChild(wordElem);
+      popup.appendChild(buildReadingElem(reading, pitchData, word));
+      popup.appendChild(buildMeaningsElem(entry.senses));
+
+      clampPopup(popup);
+      setTimeout(() => dismissPopup(popup), dismissTimeout);
     }
-
-    const entry = response.data.data[0];
-    const word = entry.japanese[0].word || selection;
-    const reading = entry.japanese[0].reading || "";
-    const meanings = entry.senses[0].english_definitions.join(", ");
-    const pitchData = response.ojadHtml ? parseOJAD(response.ojadHtml) : null;
-
-    const wordElem = document.createElement("div");
-    wordElem.style.cssText = "font-size:18px; font-weight:bold; color:#2b2b2b; margin-bottom:5px;";
-    wordElem.textContent = word;
-
-    const meaningsElem = document.createElement("div");
-    meaningsElem.style.marginTop = "5px";
-    meaningsElem.textContent = meanings;
-
-    popup.appendChild(wordElem);
-    popup.appendChild(buildReadingElem(reading, pitchData, word));
-    popup.appendChild(meaningsElem);
-
-    setTimeout(() => dismissPopup(popup), 8000);
-  });
+  );
 });
